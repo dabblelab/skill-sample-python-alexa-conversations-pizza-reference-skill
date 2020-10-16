@@ -1,0 +1,9 @@
+# AWS lambda build
+build*
+
+# Python virtualenv
+env
+
+# vscode and mac
+.DS_STORE
+.vscode
