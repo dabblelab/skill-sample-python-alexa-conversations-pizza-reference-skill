@@ -1,23 +1,22 @@
-from typing import Union
-
 import copy
 import json
-from datetime import datetime
 import logging
-
-from ask_sdk_model import Response
+from datetime import datetime
+from typing import Union
 
 import ask_sdk_core.utils as ask_utils
-from ask_sdk_core.skill_builder import SkillBuilder
-from ask_sdk_model.dialog import DelegateRequestDirective
-from ask_sdk_core.dispatch_components import (AbstractRequestHandler, AbstractExceptionHandler, AbstractRequestInterceptor, AbstractResponseInterceptor)
+from ask_sdk_core.dispatch_components import (AbstractExceptionHandler,
+                                              AbstractRequestHandler,
+                                              AbstractRequestInterceptor)
 from ask_sdk_core.handler_input import HandlerInput
+from ask_sdk_core.skill_builder import SkillBuilder
+from ask_sdk_model import Response
+from ask_sdk_model.dialog import DelegateRequestDirective
 from ask_sdk_model.ui import AskForPermissionsConsentCard
-from ask_sdk_model.ui import reprompt
 
-import utils
 import menu
 import resources
+import utils
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -450,50 +449,58 @@ class BuildMyOwnPizzaIntentHandler(AbstractRequestHandler):
 
         if count_slot_value is not None:
             if count_slot_value is 2:
-                return (handler_input.response_builder
-                        .addDirective({
-                            'type': 'Dialog.DelegateRequest',
-                            'target': 'AMAZON.Conversations',
-                            'period': {
-                                'until': 'EXPLICIT_RETURN' 
-                            },
-                            'updatedRequest': {
-                                'type': 'Dialog.InputRequest',
-                                'input': {
-                                    'name': 'startTwoToppingPizzaOrder'
+                return (
+                    handler_input
+                        .response_builder
+                        .add_directive(
+                            DelegateRequestDirective(
+                                target = "AMAZON.Conversations",
+                                period = {
+                                    "until": "EXPLICIT_RETURN"
+                                },
+                                updated_request = {
+                                    "type": "Dialog.InputRequest",
+                                    "input": {
+                                        "name": "startTwoToppingPizzaOrder",
+                                    }
                                 }
-                            }
-                        })
+                            )
+                        )
                         .response
                 )
 
         size_slot_value = ask_utils.request_util.get_slot_value(handler_input, 'size')
 
         if size_slot_value is not None:
-            return (handler_input.response_builder
-                .addDirective({
-                    'type': 'Dialog.DelegateRequest',
-                    'target': 'AMAZON.Conversations',
-                    'period': {
-                        'until': 'EXPLICIT_RETURN' 
-                    },
-                    'updatedRequest': {
-                        'type': 'Dialog.InputRequest',
-                        'input': {
-                            'name': 'orderSpecificSizePizza',
-                            'slots': {
-                                'name': {
-                                    'name': 'size',
-                                    'value': size_slot_value
+            return (
+                handler_input
+                    .response_builder
+                    .add_directive(
+                        DelegateRequestDirective(
+                            target = "AMAZON.Conversations",
+                            period = {
+                                "until": "EXPLICIT_RETURN"
+                            },
+                            updated_request = {
+                                "type": "Dialog.InputRequest",
+                                "input": {
+                                    "name": "orderSpecificSizePizza",
+                                    "slots": {
+                                        'name': {
+                                            'name': 'size',
+                                            'value': size_slot_value
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    }
-                })
-                .response
+                        )
+                    )
+                    .response
             )
         
-        return (handler_input.response_builder
+        return (
+            handler_input
+                .response_builder
                 .add_directive(
                     DelegateRequestDirective(
                         target = "AMAZON.Conversations",
@@ -563,7 +570,6 @@ class GetHoursIntentHandler(AbstractRequestHandler):
 
 # *****************************************************************************
 # This is the default intent handler to handle all intent requests.
-
 class OtherIntentHandler(AbstractRequestHandler):
 
     def can_handle(self, handler_input: HandlerInput) -> bool:
@@ -644,6 +650,155 @@ class OrderPizza(AbstractRequestHandler):
             }
         )
 
+class GetPizzaReferenceSpecialDetails(AbstractRequestHandler):
+
+    def can_handle(self, handler_input: HandlerInput) -> bool:
+        return utils.is_api_request(handler_input, 'GetPizzaReferenceSpecialDetails')
+    
+    def handle(self, handler_input: HandlerInput) -> Union[None, Response]:
+        print("In GetPizzaReferenceSpecialDetails API Handler")
+
+        api_arguments = utils.get_api_arguments(handler_input)
+        special = menu.get_special_pizza_details(api_arguments["name"])
+
+        return({
+            'apiResponse': special
+            }
+        )
+
+class GetRelativeFeedingSize(AbstractRequestHandler):
+
+    def can_handle(self, handler_input: HandlerInput) -> bool:
+        return utils.is_api_request(handler_input, 'GetRelativeFeedingSize')
+    
+    def handle(self, handler_input: HandlerInput) -> Union[None, Response]:
+        print("In GetRelativeFeedingSize API Handler")
+
+        api_arguments = utils.get_api_arguments(handler_input)
+        feeding_size = menu.get_feeding_size(api_arguments["size"])
+
+        return({
+            'apiResponse': feeding_size
+            }
+        )
+
+class OrderTwoToppingPizza(AbstractRequestHandler):
+
+    def can_handle(self, handler_input: HandlerInput) -> bool:
+        return utils.is_api_request(handler_input, 'OrderTwoToppingPizza')
+    
+    def handle(self, handler_input: HandlerInput) -> Union[None, Response]:
+        print("In OrderTwoToppingPizza API Handler")
+
+        api_arguments = utils.get_api_arguments(handler_input)
+        session_attrs = handler_input.attributes_manager.session_attributes
+        api_arguments["cheese"] = "normal"
+        api_arguments["toppingsList"] = [api_arguments["toppingone"], api_arguments["toppingtwo"]]
+        session_attrs["pizza"] = api_arguments
+
+        return ({
+            "directives": [
+                DelegateRequestDirective(
+                    target = "skill",
+                    period = {
+                        "until": "EXPLICIT_RETURN"
+                    },
+                    updated_request = {
+                        "type": 'IntentRequest',
+                        "intent": {
+                            "name": "OrderIntent"
+                        }
+                    }
+                )
+            ],
+            "apiResponse": {}
+        })
+
+class OrderCustomizedPizzaReferenceSpecial(AbstractRequestHandler):
+
+    def can_handle(self, handler_input: HandlerInput) -> bool:
+        return utils.is_api_request(handler_input, 'OrderCustomizedPizzaReferenceSpecial')
+    
+    def handle(self, handler_input: HandlerInput) -> Union[None, Response]:
+        print("In OrderCustomizedPizzaReferenceSpecial API Handler")
+
+        api_arguments = utils.get_api_arguments(handler_input)
+        session_attrs = handler_input.attributes_manager.session_attributes
+
+        special = {}
+        special["pizza"] = {}
+        special["name"] = api_arguments["name"]
+        special["qty"] = api_arguments["qty"]
+        special["pizza"]["size"] = api_arguments["size"]
+        special["pizza"]["cheese"] = api_arguments["cheese"]
+        special["pizza"]["crust"] = api_arguments["crust"]
+        special["pizza"]["toppingsList"] = api_arguments["toppings"]
+        special["pizza"]["cost"] = menu.get_special_cost(special["name"])
+        session_attrs.in_progress = special
+
+        return ({
+            "directives": [
+                DelegateRequestDirective(
+                    target = "skill",
+                    period = {
+                        "until": "EXPLICIT_RETURN"
+                    },
+                    updated_request = {
+                        "type": 'IntentRequest',
+                        "intent": {
+                            "name": "OrderIntent"
+                        }
+                    }
+                )
+            ],
+            "apiResponse": {}
+        })
+
+class MenuQuestion(AbstractRequestHandler):
+
+    def can_handle(self, handler_input: HandlerInput) -> bool:
+        return utils.is_api_request(handler_input, 'MenuQuestion')
+    
+    def handle(self, handler_input: HandlerInput) -> Union[None, Response]:
+        print("In MenuQuestion API Handler")
+
+        api_arguments = utils.get_api_arguments(handler_input)
+        slots = utils.get_api_slots(handler_input)
+        print(api_arguments)
+        print(slots)
+
+        option_value = api_arguments["option"]
+        option_response = "Your choices of"
+
+        if slots:
+            option_value = slots.option.resolutionsPerAuthority[0].values[0].value.name
+        
+        if option_value == "size":
+            option_response += "size are small, medium, large, and extra large"
+        elif option_value == "crust":
+            option_response += "crust are thin crust, deep dish, regular and brooklyn style"
+        elif option_value == "cheese":
+            option_response += "cheese are no cheese, light, normal, extra cheese or double cheese"
+        
+        option_response += ", what would you like"
+        return {
+            "apiResponse": {
+                "optionResponse": option_response
+            }
+        }
+
+# *****************************************************************************
+# Generic session-ended handling logging the reason received, to help debug in error cases.
+class SessionEndedRequestHandler(AbstractRequestHandler):
+
+    def can_handle(self, handler_input: HandlerInput) -> bool:
+        return ask_utils.request_util.get_request_type(handler_input) == 'SessionEndedRequest'
+    
+    def handle(self, handler_input: HandlerInput) -> Union[None, Response]:
+        reason = handler_input.request_envelope.request.reason
+        print("Session ended with reason: {reason}".format(reason))
+        return handler_input.response_builder.response
+
 class LocalizationInterceptor(AbstractRequestInterceptor):
     """
     Add function to request attributes, that can load locale specific data.
@@ -683,8 +838,6 @@ class CatchAllExceptionHandler(AbstractExceptionHandler):
             .response
         )
 
-
-
 sb = SkillBuilder()
 
 # register request handlers
@@ -705,6 +858,12 @@ sb.add_request_handler(OtherIntentHandler())
 sb.add_request_handler(StopIntentHandler())
 sb.add_request_handler(CancelIntentHandler())
 sb.add_request_handler(OrderPizza())
+sb.add_request_handler(GetPizzaReferenceSpecialDetails())
+sb.add_request_handler(GetRelativeFeedingSize())
+sb.add_request_handler(OrderTwoToppingPizza())
+sb.add_request_handler(OrderCustomizedPizzaReferenceSpecial())
+sb.add_request_handler(MenuQuestion())
+sb.add_request_handler(SessionEndedRequestHandler())
 
 # interceptors
 sb.add_global_request_interceptor(LocalizationInterceptor())

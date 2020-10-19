@@ -51,3 +51,11 @@ def get_api_arguments(handler_input: HandlerInput):
     except Exception as e:
         print(e)
         return {}
+
+def get_api_slots(handler_input: HandlerInput):
+    try:
+        slots = handler_input.request_envelope.request.api_request.slots
+        return slots
+    except Exception as e:
+        print("Error occurred while getting api request entity:", e)
+        raise e
