@@ -1,15 +1,14 @@
-import copy
 import json
 import logging
 from datetime import datetime
 from typing import Union
 
 import ask_sdk_core.utils as ask_utils
+from ask_sdk.standard import StandardSkillBuilder
 from ask_sdk_core.dispatch_components import (AbstractExceptionHandler,
                                               AbstractRequestHandler,
                                               AbstractRequestInterceptor)
 from ask_sdk_core.handler_input import HandlerInput
-from ask_sdk_core.skill_builder import SkillBuilder
 from ask_sdk_model import Response
 from ask_sdk_model.dialog import DelegateRequestDirective
 from ask_sdk_model.ui import AskForPermissionsConsentCard
@@ -27,7 +26,8 @@ STATES = {
     "PROMPTED_TO_CUSTOMIZE" : 'PROMPTED_TO_CUSTOMIZE',
     "PROMPTED_TO_ADD_TO_ORDER": 'PROMPTED_TO_ADD_TO_ORDER',
     "PROMPTED_TO_ORDER_SPECIAL" : 'PROMPTED_TO_ORDER_SPECIAL',
-    "PROMPTED_TO_CUSTOMIZE_SPECIAL_PIZZA" : 'PROMPTED_TO_CUSTOMIZE_SPECIAL_PIZZA'
+    "PROMPTED_TO_CUSTOMIZE_SPECIAL_PIZZA" : 'PROMPTED_TO_CUSTOMIZE_SPECIAL_PIZZA',
+    "PROMPTED_TO_HEAR_BLUE_SHIFT_SPECIAL_DETAILS": "PROMPTED_TO_HEAR_BLUE_SHIFT_SPECIAL_DETAILS"
 }
 
 class LaunchHandler(AbstractRequestHandler):
@@ -171,14 +171,14 @@ class AddPizzaReferenceSpecialToOrderIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input: HandlerInput) -> bool:
         return ask_utils.request_util.get_request_type(handler_input) == 'IntentRequest' \
             and ask_utils.request_util.get_intent_name(handler_input) == 'AddPizzaReferenceSpecialToOrderIntent'
-    
+
     def handle(self, handler_input: HandlerInput) -> Union[None, Response]:
         print("In AddPizzaReferenceSpecialToOrderIntentHandler");
 
-        special_slot = ask_utils.request_util.get_slot_value(handler_input, 'special')
-        first_authority = special_slot.get('resolutions', {}).get("resolutionsPerAuthority", [])[0]
-        special = first_authority.get('values', [])[0]
-        
+        special_slot = ask_utils.request_util.get_slot(handler_input, 'special')
+        first_authority = special_slot.resolutions.resolutions_per_authority[0]
+        special = first_authority.values[0].value.name
+
         # the user answered yes to ordering one of the special pizzas
         speak_output = handler_input.t('PROMPT_TO_CUSTOMIZE_SPECIAL',
             name=special
@@ -230,7 +230,7 @@ class WhatsInMyOrderIntentHandler(AbstractRequestHandler):
     def handle(self, handler_input: HandlerInput) -> Union[None, Response]:
         # They are asking what's in their current order
         session_attrs = handler_input.attributes_manager.session_attributes
-        in_progress = session_attrs["in_progress"]
+        in_progress = session_attrs.get("in_progress", None)
 
         # they dont have an in progress order
         if in_progress is None:
@@ -259,7 +259,7 @@ class NoIntentHandler(AbstractRequestHandler):
         speak_output = ""
         reprompt = ""
         session_attrs = handler_input.attributes_manager.session_attributes
-        
+        print("NOT SESSION ATTRS", session_attrs)
         # if we just prompted them for specials, ordering daily special, or customizing special pizza
         if session_attrs["state"] == STATES["PROMPTED_FOR_DAILY_SPECIALS"]\
             or session_attrs["state"] == STATES["PROMPTED_TO_ORDER_DAILY_SPECIAL"]\
@@ -279,6 +279,7 @@ class NoIntentHandler(AbstractRequestHandler):
                 "order": in_progress
             })
             del session_attrs["in_progress"]
+            print("ORDER TEXT", menu.generate_order_text(in_progress))
             speak_output = handler_input.t("PLACE_ORDER",
                 orderText=menu.generate_order_text(in_progress)
             )
@@ -327,8 +328,8 @@ class OrderIntentHandler(AbstractRequestHandler):
         session_attrs = handler_input.attributes_manager.session_attributes
 
         session_attrs['orders'] = []
-
-        in_progress = session_attrs['in_progress']
+        print(session_attrs)
+        in_progress = session_attrs.get('in_progress', {})
         order_text = menu.generate_order_text(in_progress)
 
         session_attrs['orders'].append({
@@ -356,8 +357,8 @@ class AddSomethingIntentHandler(AbstractRequestHandler):
         print("In AddSomethingIntentHandler")
 
         item_slot = ask_utils.request_util.get_slot_value(handler_input, "item")
-        first_authority = item_slot.get('resolutions', {}).get("resolutionsPerAuthority", [])[0]
-        item = first_authority.get("values", [])[0]["value"]["name"]
+        first_authority = item_slot.resolutions.resolutions_per_authority[0]
+        item = first_authority.values[0].value.name
 
         if item == "pizza":
             speak_output = handler_input.t("PIZZA_ORDER_OPTIONS")
@@ -402,8 +403,8 @@ class HearPizzaReferenceSpecialsIntentHandler(AbstractRequestHandler):
     
     def handle(self, handler_input: HandlerInput) -> Union[None, Response]:
         print("In HearPizzaReferenceSpecialsIntentHandler")
-        # make a deep copy of the object and return a 'speakable' list
-        specials = menu.make_speakable_list(copy.deepcopy(menu.get_pizza_reference_specials()))
+
+        specials = menu.make_speakable_list(menu.get_pizza_reference_specials())
         speak_output = handler_input.t("PIZZA_REFERENCE_SPECIALS", 
             specials=specials
         )
@@ -434,6 +435,106 @@ class HelpIntentHandler(AbstractRequestHandler):
             .speak(speak_output)
             .ask(reprompt)
             .response
+        )
+
+class HearSpecialDetailsIntentHandler(AbstractRequestHandler):
+
+    def can_handle(self, handler_input: HandlerInput) -> bool:
+        return ask_utils.request_util.get_request_type(handler_input) == 'IntentRequest' \
+            and ask_utils.request_util.get_intent_name(handler_input) == 'HearSpecialDetailsIntent'
+    
+    def handle(self, handler_input: HandlerInput) -> Union[None, Response]:
+        print("In HearSpecialDetailsIntentHandler")
+
+        special_slot = ask_utils.request_util.get_slot(handler_input, 'special')
+        try:
+            first_authority = special_slot.resolutions.resolutions_per_authority[0]
+            special_name = first_authority.values[0].value.name
+        except:
+            special_name = None
+
+        # if they didnt pass us a name and just asked for details 'on a special', lets prompt again for name
+        if special_name is None:
+            specials = menu.make_speakable_list(menu.get_pizza_reference_specials())
+            speak_output = handler_input.t("REPEAT_PIZZA_REFERENCE_SPECIALS_AND_GET_NAME", 
+                specials=specials,
+                error=""
+            )
+            reprompt = handler_input.t("REPEAT_PIZZA_REFERENCE_SPECIALS_AND_GET_NAME_REPROMPT")
+        
+            return (
+                handler_input.response_builder
+                .speak(speak_output)
+                .ask(reprompt)
+                .response
+            )
+
+        # if they passed in a name, but its not a special
+        if special_name not in menu.get_pizza_reference_specials():
+            specials = menu.make_speakable_list(menu.get_pizza_reference_specials())
+            speak_output = handler_input.t("REPEAT_PIZZA_REFERENCE_SPECIALS_AND_GET_NAME", 
+                specials=specials,
+                error="Sorry, I dont recognize {} as one of our specials.".format(special_name)
+            )
+            reprompt = handler_input.t("REPEAT_PIZZA_REFERENCE_SPECIALS_AND_GET_NAME_REPROMPT")
+        
+            return (
+                handler_input.response_builder
+                .speak(speak_output)
+                .ask(reprompt)
+                .response
+            )
+
+        # if we get here, we have a valid special name
+        session_attrs = handler_input.attributes_manager.session_attributes();
+        # if we are re-prompting them for the special name and they indicated they wanted to customize
+        if session_attrs["state"] == STATES["PROMPTED_TO_CUSTOMIZE_SPECIAL_PIZZA"]:
+            return (
+                handler_input
+                    .response_builder
+                    .add_directive(
+                        DelegateRequestDirective(
+                            target = "AMAZON.Conversations",
+                            period = {
+                                "until": "EXPLICIT_RETURN"
+                            },
+                            updated_request = {
+                                "type": "Dialog.InputRequest",
+                                "input": {
+                                    "name": "customizePizzaReferenceSpecial",
+                                    "slots": {
+                                        "name": {
+                                            "name": "name",
+                                            "value": special_name
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    )
+                    .response
+            )
+        special = menu.get_special_pizza_details(special_name)
+        speak_output = handler_input.t('PIZZA_REFERENCE_SPECIAL_DETAILS_PROMPT_TO_ORDER',
+            name=special["name"],
+            qty=special["qty"],
+            size=special["pizza"]["size"],
+            crust=special["pizza"]["crust"],
+            cheese=special["pizza"]["cheese"],
+            toppings=menu.make_speakable_list(special["pizza"]["toppingsList"]),
+            cost=special["cost"]
+        )
+        reprompt = handler_input.t('PIZZA_REFERENCE_SPECIAL_DETAILS_PROMPT_TO_ORDER_REPROMPT',
+            name=special["name"]
+        )
+        session_attrs["state"] = STATES["PROMPTED_TO_ORDER_SPECIAL"]
+        session_attrs["specialName"] = special_name
+        return (
+            handler_input
+                .response_builder
+                .speak(speak_output)
+                .ask(reprompt)
+                .response
         )
 
 class BuildMyOwnPizzaIntentHandler(AbstractRequestHandler):
@@ -528,7 +629,7 @@ class GetHoursIntentHandler(AbstractRequestHandler):
         print("In GetHoursIntent")
         
         user = handler_input.request_envelope.context.system.user
-        consent_token = user.permissions.consent_token if user.token.permissions is not None else None
+        consent_token = user.permissions.consent_token if user.permissions is not None else None
 
         if consent_token is None:
             return (
@@ -539,19 +640,19 @@ class GetHoursIntentHandler(AbstractRequestHandler):
             )
         
         try:
-            device_id = handler_input.request_envelope.context.system.device
+            device_id = handler_input.request_envelope.context.system.device.device_id
             device_address_service_client = handler_input.service_client_factory.get_device_address_service()
             address = device_address_service_client.get_full_address(device_id)
 
-            if address["address_line_1"] is None and address["state_or_region"] is None:
+            if address is None or (address.address_line1 is None and address.state_or_region is None):
                 response = handler_input.response_builder.speak(handler_input.t("NO_ADDRESS_SET")).response
             else:
-                city = address["city"]
+                city = address.city
                 prompt = handler_input.t("CLOSEST_LOCATION", 
                     city=city
                 )
                 reprompt = handler_input.t("GENERIC_REPROMPT")
-                response = ( 
+                response = (
                     handler_input
                         .response_builder
                         .speak(prompt)
@@ -796,7 +897,7 @@ class SessionEndedRequestHandler(AbstractRequestHandler):
     
     def handle(self, handler_input: HandlerInput) -> Union[None, Response]:
         reason = handler_input.request_envelope.request.reason
-        print("Session ended with reason: {reason}".format(reason))
+        print("Session ended with reason: ", reason)
         return handler_input.response_builder.response
 
 class LocalizationInterceptor(AbstractRequestInterceptor):
@@ -838,7 +939,7 @@ class CatchAllExceptionHandler(AbstractExceptionHandler):
             .response
         )
 
-sb = SkillBuilder()
+sb = StandardSkillBuilder()
 
 # register request handlers
 sb.add_request_handler(LaunchHandler())
@@ -852,6 +953,7 @@ sb.add_request_handler(OrderIntentHandler())
 sb.add_request_handler(AddSomethingIntentHandler())
 sb.add_request_handler(HearPizzaReferenceSpecialsIntentHandler())
 sb.add_request_handler(HelpIntentHandler())
+sb.add_request_handler(HearSpecialDetailsIntentHandler())
 sb.add_request_handler(BuildMyOwnPizzaIntentHandler())
 sb.add_request_handler(GetHoursIntentHandler())
 sb.add_request_handler(OtherIntentHandler())

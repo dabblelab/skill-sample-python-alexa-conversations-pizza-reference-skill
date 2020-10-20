@@ -2,8 +2,7 @@ import logging
 from datetime import datetime
 
 from ask_sdk_core.handler_input import HandlerInput
-import ask_sdk_core.utils as ask_utils
-from ask_sdk_model.services import service_client_factory
+
 
 def is_api_request(handler_input: HandlerInput, api_name: str) -> bool:
     try:
@@ -25,7 +24,7 @@ def get_person_id(handler_input: HandlerInput):
     if person:
         return person.personId
 
-def get_period_id(handler_input: HandlerInput):
+def get_day_and_period(handler_input: HandlerInput):
     service_client_factory = handler_input.service_client_factory
     device_id = handler_input.request_envelope.context.system.device.device_id
 
@@ -37,6 +36,8 @@ def get_period_id(handler_input: HandlerInput):
     except Exception as e:
         print('error', e)
     
+
+    datetime.strptime(user_timezone)
     print("User's timezone: {}".format(user_timezone))
 
     return {

@@ -324,12 +324,12 @@ def generate_order_text(order):
   order_text = ""
   cost = 0
 
-  if order.get('special', False) is True:
-    order_text = "a {special_name} comes with {qty} {size}".format(order['special']['name'], order['special']['qty'], order['special']['pizza']['size'])
+  if order.get('special', None) is not None:
+    order_text = "a {} comes with {} {}".format(order['special']['name'], order['special']['qty'], order['special']['pizza']['size'])
     speakable_toppings = order['special']['pizza']['toppings_list']
     last_topping = speakable_toppings.pop()
-    order_text += "{speakable_toppings} {last_topping} pizza".format(", ".join(speakable_toppings), last_topping)
-    order_text += " on {crust} with {cheese} ".format(order["special"]["pizza"]["crust"], order["special"]["pizza"]["cheese"])
+    order_text += "{} {} pizza".format(", ".join(speakable_toppings), last_topping)
+    order_text += " on {} with {} ".format(order["special"]["pizza"]["crust"], order["special"]["pizza"]["cheese"])
     if order["special"]["cost"] is not None:
       cost += order["special"]["cost"]
 
@@ -338,11 +338,11 @@ def generate_order_text(order):
     print("type of pizza IS {}".format(type(order["pizza"])))
     print("inside {}".format(order["pizza"].get("size", None)))
     
-    order_text += " a {size}".format(order["pizza"]["size"])
+    order_text += " a {}".format(order["pizza"]["size"])
     speakable_toppings = order["pizza"]["toppingsList"]
     last_topping = "and {}".format(speakable_toppings.pop())
-    order_text += "{speakable_toppings} {last_topping} pizza".format(", ".join(speakable_toppings), last_topping)
-    order_text += " on {crust} with {cheese} ".format(order["pizza"]["crust"], order["pizza"]["cheese"])
+    order_text += "{} {} pizza".format(", ".join(speakable_toppings), last_topping)
+    order_text += " on {} crust with {} cheese".format(order["pizza"]["crust"], order["pizza"]["cheese"])
     cost += get_pizza_cost(order["pizza"]["size"])
 
   if order.get("salad", None) is not None:
@@ -388,7 +388,7 @@ def get_daily_special_for_period(day, period):
 def get_pizza_reference_specials():
   def map_func(special):
     return special['name']
-  return map(map_func, specials)
+  return list(map(map_func, specials))
 
 def get_special_pizza_details(pizza_name):
   print("In getSpecialPizzaDetails, looking for: {}".format(pizza_name))

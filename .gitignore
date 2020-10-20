@@ -3,6 +3,7 @@ build*
 
 # Python virtualenv
 env
+.venv
 
 # vscode and mac
 .DS_STORE
